@@ -104,7 +104,7 @@ class ManageUserController extends Controller
 
         $roles  = $this->getRolesArray($business_id);
         $username_ext = $this->getUsernameExtension();
-        $contacts = Contact::contactDropdown($business_id, true, false);
+        $contacts = collect();
         $locations = BusinessLocation::where('business_id', $business_id)
                                     ->Active()
                                     ->get();
@@ -266,7 +266,12 @@ class ManageUserController extends Controller
         $roles = $this->getRolesArray($business_id);
 
         $contact_access = $user->contactAccess->pluck('id')->toArray();
-        $contacts = Contact::contactDropdown($business_id, true, false);
+
+        //Only the currently selected contacts need to be pre-rendered as
+        //<option> tags; the rest are loaded on demand via ajax (see
+        //ManageUserController@getContacts) to avoid loading the entire
+        //(potentially huge) contacts list on every page load.
+        $contacts = $user->contactAccess->pluck('name', 'id');
 
         if ($user->status == 'active') {
             $is_checked_checkbox = true;
@@ -432,6 +437,55 @@ class ManageUserController extends Controller
 
             return $output;
         }
+    }
+
+    /**
+     * Returns paginated list of contacts for the select2 ajax dropdown
+     * used in the create/edit user forms.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function getContacts()
+    {
+        if (!request()->ajax()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = request()->session()->get('user.business_id');
+        $term = request()->input('q');
+        $page = (int) request()->input('page', 1);
+        $per_page = 20;
+
+        $query = Contact::where('business_id', $business_id)
+                    ->where('type', '!=', 'lead')
+                    ->where('is_default', 0)
+                    ->active();
+
+        if (!auth()->user()->can('supplier.view') && auth()->user()->can('supplier.view_own')) {
+            $query->where('contacts.created_by', auth()->user()->id);
+        }
+
+        if (!empty($term)) {
+            $query->where(function ($q) use ($term) {
+                $q->where('name', 'like', '%' . $term . '%')
+                    ->orWhere('supplier_business_name', 'like', '%' . $term . '%')
+                    ->orWhere('contact_id', 'like', '%' . $term . '%');
+            });
+        }
+
+        $query->select(
+            'id',
+            DB::raw("IF(contact_id IS NULL OR contact_id='', name, CONCAT(name, ' - ', COALESCE(supplier_business_name, ''), '(', contact_id, ')')) AS text")
+        );
+
+        $contacts = $query->orderBy('name')->paginate($per_page, ['*'], 'page', $page);
+
+        return [
+            'results' => $contacts->getCollection()->map(function ($contact) {
+                return ['id' => $contact->id, 'text' => $contact->text];
+            }),
+            'pagination' => ['more' => $contacts->hasMorePages()],
+        ];
     }
 
     private function getUsernameExtension()

@@ -171,7 +171,7 @@
                 <div class="form-group">
                   {!! Form::label('selected_contacts', __('lang_v1.selected_contacts') . ':') !!}
                     <div class="form-group">
-                      {!! Form::select('selected_contact_ids[]', $contacts, $contact_access, ['class' => 'form-control select2', 'multiple', 'style' => 'width: 100%;' ]); !!}
+                      {!! Form::select('selected_contact_ids[]', $contacts, $contact_access, ['class' => 'form-control', 'id' => 'selected_contact_ids', 'multiple', 'style' => 'width: 100%;' ]); !!}
                     </div>
                 </div>
             </div>
@@ -202,6 +202,26 @@
     });
     $('#selected_contacts').on('ifUnchecked', function(event){
       $('div.selected_contacts_div').addClass('hide');
+    });
+
+    $('#selected_contact_ids').select2({
+      width: '100%',
+      ajax: {
+        url: '{{ action("ManageUserController@getContacts") }}',
+        dataType: 'json',
+        delay: 250,
+        data: function (params) {
+          return {
+            q: params.term,
+            page: params.page || 1
+          };
+        },
+        processResults: function (data) {
+          return data;
+        },
+        cache: true
+      },
+      minimumInputLength: 0
     });
     $('#allow_login').on('ifChecked', function(event){
       $('div.user_auth_fields').removeClass('hide');

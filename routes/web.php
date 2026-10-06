@@ -129,6 +129,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
 
     Route::resource('roles', 'RoleController');
 
+    Route::get('/users/get-contacts', 'ManageUserController@getContacts');
     Route::resource('users', 'ManageUserController');
 
     Route::resource('group-taxes', 'GroupTaxController');
